@@ -1,7 +1,7 @@
 {
-  "name": "cash-api-railway",
+  "name": "cash-api",
   "version": "1.0.0",
-  "description": "API de gestion de cash persistante avec SQLite",
+  "description": "API de gestion de cash avec SQLite",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
