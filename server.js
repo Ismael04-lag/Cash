@@ -9,9 +9,29 @@ app.use(express.json());
 const CASH_PREFIX = "cash:";
 
 app.get("/", (req, res) => {
-    res.json({ message: "Cash API opérationnelle", version: "2.1.0" });
+    res.json({ message: "Cash API opérationnelle", version: "2.2.0" });
 });
 
+// La route /top doit être AVANT /:userId
+app.get("/api/cash/top", async (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    try {
+        const keys = await kv.keys(`${CASH_PREFIX}*`);
+        const users = [];
+        for (const key of keys) {
+            const userId = key.replace(CASH_PREFIX, "");
+            const cash = Number(await kv.get(key)) || 0;
+            users.push({ userId, cash });
+        }
+        users.sort((a, b) => b.cash - a.cash);
+        const result = users.slice(0, limit);
+        res.json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Route /:userId APRÈS /top
 app.get("/api/cash/:userId", async (req, res) => {
     const { userId } = req.params;
     try {
@@ -73,26 +93,6 @@ app.post("/api/cash/:userId/subtract", async (req, res) => {
         await kv.set(`${CASH_PREFIX}${userId}`, newCash);
         res.json({ success: true, data: { userId, cash: newCash } });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-app.get("/api/cash/top", async (req, res) => {
-    const limit = parseInt(req.query.limit) || 50;
-    try {
-        const keys = await kv.keys(`${CASH_PREFIX}*`);
-        const users = [];
-        for (const key of keys) {
-            const userId = key.replace(CASH_PREFIX, "");
-            const cash = Number(await kv.get(key)) || 0;
-            users.push({ userId, cash });
-        }
-        users.sort((a, b) => b.cash - a.cash);
-        const result = users.slice(0, limit);
-        console.log(`[TOP] ${keys.length} clés trouvées, ${result.length} utilisateurs retournés`);
-        res.json({ success: true, data: result });
-    } catch (error) {
-        console.error("Erreur /api/cash/top:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
