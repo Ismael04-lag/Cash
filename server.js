@@ -26,17 +26,6 @@ app.get("/", (req, res) => {
     res.json({ message: "Cash API opérationnelle", version: "3.1" });
 });
 
-app.get("/api/cash/:userId", async (req, res) => {
-    const { userId } = req.params;
-    try {
-        const cashStr = await getCashString(userId);
-        res.json({ success: true, data: { userId, cash: cashStr } });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// ── NOUVELLE ROUTE TOP ──────────────────────────────────────────
 app.get("/api/cash/top", async (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     try {
@@ -52,6 +41,16 @@ app.get("/api/cash/top", async (req, res) => {
             return diff > 0n ? 1 : diff < 0n ? -1 : 0;
         });
         res.json({ success: true, data: users.slice(0, limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get("/api/cash/:userId", async (req, res) => {
+    const { userId } = req.params;
+    try {
+        const cashStr = await getCashString(userId);
+        res.json({ success: true, data: { userId, cash: cashStr } });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -93,7 +92,7 @@ app.post("/api/cash/:userId/subtract", async (req, res) => {
     try {
         const current = await getCashString(userId);
         const bigCurrent = BigInt(current);
-        const bigAmount  = BigInt(amount);
+        const bigAmount = BigInt(amount);
         if (bigCurrent < bigAmount)
             return res.status(400).json({ success: false, error: "Solde insuffisant" });
         const newCash = (bigCurrent - bigAmount).toString();
