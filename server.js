@@ -13,9 +13,7 @@ async function getCashString(userId) {
     if (raw === null || raw === undefined) return "0";
     if (typeof raw === 'string') return raw;
     if (typeof raw === 'number') return raw.toString();
-    if (typeof raw === 'object' && raw !== null) {
-        return raw.cash?.toString() || "0";
-    }
+    if (typeof raw === 'object' && raw !== null) return raw.cash?.toString() || "0";
     return "0";
 }
 
@@ -25,7 +23,7 @@ function isValidCashString(str) {
 }
 
 app.get("/", (req, res) => {
-    res.json({ message: "Cash API opérationnelle", version: "3.0" });
+    res.json({ message: "Cash API opérationnelle", version: "3.1" });
 });
 
 app.get("/api/cash/:userId", async (req, res) => {
@@ -38,16 +36,35 @@ app.get("/api/cash/:userId", async (req, res) => {
     }
 });
 
+// ── NOUVELLE ROUTE TOP ──────────────────────────────────────────
+app.get("/api/cash/top", async (req, res) => {
+    const limit = parseInt(req.query.limit) || 50;
+    try {
+        const keys = await kv.keys(`${CASH_PREFIX}*`);
+        const users = [];
+        for (const key of keys) {
+            const userId = key.replace(CASH_PREFIX, "");
+            const cashStr = await getCashString(userId);
+            users.push({ userId, cash: cashStr });
+        }
+        users.sort((a, b) => {
+            const diff = BigInt(b.cash) - BigInt(a.cash);
+            return diff > 0n ? 1 : diff < 0n ? -1 : 0;
+        });
+        res.json({ success: true, data: users.slice(0, limit) });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.post("/api/cash/:userId", async (req, res) => {
     const { userId } = req.params;
     const { cash } = req.body;
-    if (cash === undefined || !isValidCashString(cash.toString())) {
+    if (cash === undefined || !isValidCashString(cash.toString()))
         return res.status(400).json({ success: false, error: "Montant invalide" });
-    }
     try {
-        const cashStr = cash.toString();
-        await kv.set(`${CASH_PREFIX}${userId}`, cashStr);
-        res.json({ success: true, data: { userId, cash: cashStr } });
+        await kv.set(`${CASH_PREFIX}${userId}`, cash.toString());
+        res.json({ success: true, data: { userId, cash: cash.toString() } });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -56,9 +73,8 @@ app.post("/api/cash/:userId", async (req, res) => {
 app.post("/api/cash/:userId/add", async (req, res) => {
     const { userId } = req.params;
     const { amount } = req.body;
-    if (amount === undefined || !isValidCashString(amount.toString()) || BigInt(amount) <= 0n) {
+    if (!amount || !isValidCashString(amount.toString()))
         return res.status(400).json({ success: false, error: "Montant invalide" });
-    }
     try {
         const current = await getCashString(userId);
         const newCash = (BigInt(current) + BigInt(amount)).toString();
@@ -72,16 +88,14 @@ app.post("/api/cash/:userId/add", async (req, res) => {
 app.post("/api/cash/:userId/subtract", async (req, res) => {
     const { userId } = req.params;
     const { amount } = req.body;
-    if (amount === undefined || !isValidCashString(amount.toString()) || BigInt(amount) <= 0n) {
+    if (!amount || !isValidCashString(amount.toString()))
         return res.status(400).json({ success: false, error: "Montant invalide" });
-    }
     try {
         const current = await getCashString(userId);
         const bigCurrent = BigInt(current);
-        const bigAmount = BigInt(amount);
-        if (bigCurrent < bigAmount) {
+        const bigAmount  = BigInt(amount);
+        if (bigCurrent < bigAmount)
             return res.status(400).json({ success: false, error: "Solde insuffisant" });
-        }
         const newCash = (bigCurrent - bigAmount).toString();
         await kv.set(`${CASH_PREFIX}${userId}`, newCash);
         res.json({ success: true, data: { userId, cash: newCash } });
